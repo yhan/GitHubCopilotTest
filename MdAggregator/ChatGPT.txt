@@ -33,5 +33,144 @@ Distribution: expose the aggregated stream via gRPC, WebSocket, or shared memory
 
 If you want this in Java (Project Loom + Flow/Reactive Streams) or with a Redis/Kafka egress, say the word and I’ll drop that version too.
 
+Moi
+--
+je lui demande pourquoi Channel ? 
 
+
+ChatGPT:
+--
+
+Good eye — that snippet is configuring the channel (the in-memory async queue) that carries aggregated events (AggEvent) to consumers.
+
+Let’s break it down:
+
+private readonly Channel<AggEvent> _out = Channel.CreateUnbounded<AggEvent>(
+    new UnboundedChannelOptions
+    {
+        SingleReader = true,
+        SingleWriter = false
+    });
+
+1. Channel<T>
+
+From System.Threading.Channels.
+
+Think of it as an async, thread-safe producer/consumer queue.
+
+Writers call Writer.WriteAsync / TryWrite.
+
+Readers call Reader.ReadAsync / WaitToReadAsync.
+
+2. CreateUnbounded
+
+“Unbounded” means no fixed capacity; it can buffer arbitrarily many AggEvents until the consumer drains them.
+
+Use this when you don’t want backpressure (risk: if consumer stalls, memory can balloon).
+
+3. UnboundedChannelOptions
+
+These hints let the runtime optimize locking:
+
+SingleReader = true
+? Only one consumer will ever read from _out.Reader.
+Benefit: the channel can skip some locks/contention on read side.
+
+SingleWriter = false
+? Multiple concurrent producers may write into the channel.
+That matches the aggregator design: several tasks (one per feed adapter) plus the main aggregator loop can all emit downstream.
+
+If you set both SingleReader = true and SingleWriter = true, the channel chooses the most optimized internal implementation (basically a lock-free queue specialized for single-writer/single-reader).
+
+? So in plain terms:
+That line builds an async queue with unlimited buffer, many writers allowed, but guaranteed only one reader. It’s a performance/throughput choice — it avoids locking on the consumer side while still allowing multiple concurrent producers.
+
+Do you want me to also show what would change if we set SingleWriter = true (i.e., aggregator is the only producer) — and how that would slightly improve throughput but restrict your design?
+
+
+Moi
+__
+Why would you code a egress ? 
+
+ChatGPT
+--
+
+Great question. In the code I gave you, the aggregated feeder is like the core of a market data system: it ingests feeds, merges them, and produces a normalized view (e.g. NBBO).
+
+But it doesn’t end there. In a real system, you need a way to deliver (egress) that aggregated stream to consumers — that’s what “egress” is about.
+
+Why code an egress?
+
+Distribution to many consumers
+
+Traders, algos, risk engines, dashboards all want the same stream.
+
+You don’t want each consumer connecting directly to every venue feed ? wasteful and inconsistent.
+
+Instead, you publish once from your aggregator, then egress layer fans it out efficiently.
+
+Transport decoupling
+
+Inside your aggregator, you might use channels or ring buffers (in-memory).
+
+Outside, consumers may require:
+
+Sockets (TCP/UDP, multicast)
+
+WebSockets (browser dashboards)
+
+Kafka, NATS, Redis Streams (persistence + pub/sub)
+
+Shared memory / UDS (for colocated HFT processes)
+
+The egress abstracts how the data leaves your process.
+
+Access control & throttling
+
+Some consumers may only be entitled to a subset (e.g. equities vs futures).
+
+Some may need throttled feeds (e.g. 100ms snapshots vs tick-by-tick).
+
+The egress layer enforces these policies without modifying core aggregation.
+
+Resilience & backpressure
+
+Consumers might be slow.
+
+Egress can conflate, drop, or queue according to rules — protecting your aggregator from stalls.
+
+Monitoring
+
+The egress layer is also the natural place to measure:
+
+How many clients?
+
+What symbols subscribed?
+
+Latency to last hop?
+
+Bandwidth per client?
+
+
+ Venue A     Venue B     Venue C
+      |           |           |
+      +-----------+-----------+
+                  |
+          Aggregated Feeder
+                  |
+              (egress)
+         -------------------
+         |        |        |
+   WebSocket   Kafka    Shared Memory
+   Clients     Cluster  Co-located algos
+   
+   
+   
+   So to answer your “why”:
+   You code an egress because the aggregator alone is not useful until you serve the normalized data out. The egress is the last hop that transforms your in-process events into consumable feeds for the outside world, while handling performance, entitlement, and backpressure concerns.
+   
+   Do you want me to show you how to structure multiple egress backends (WebSocket + Kafka + shared memory) behind a single interface, so you can plug/unplug distribution methods without touching the aggregator core?
+   
+   
+   
 
