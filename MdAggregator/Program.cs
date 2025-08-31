@@ -1,18 +1,4 @@
-﻿#region Contracts & Models
-
-
-#endregion
-
-#region Aggregator
-
-#endregion
-
-#region Simulated Feeds (drop-in stubs for real adapters)
-
-#endregion
-
-#region Demo app
-
+﻿
 var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
@@ -53,4 +39,36 @@ await foreach (var ev in agg.StreamAsync(symbols, cts.Token))
     }
 }
 
-#endregion
+
+
+async Task EgressPub()
+{
+    var symbols = new[] { "AAPL", "MSFT" };
+    var source = agg.StreamAsync(symbols, cts.Token);
+
+// Start the hub (tees source into per-client buffers)
+    var policy = new EgressPolicy(
+        BoundedCapacity: 8192,
+        BackpressureMode: BackpressureMode.DropOldest,
+        ConflateInterval: TimeSpan.FromMilliseconds(10) // e.g. 100 Hz per client max
+    );
+    EgressHub.Start(source, policy, cts.Token);
+
+// Choose any backends you want:
+    await using var egress = new CompositeEgressPublisher(new IEgressPublisher[]
+    {
+        new WebSocketEgress("http://localhost:5000/ws/", policy),
+        new KafkaEgress(topic: "md.agg.nbbo", policy),
+        new NamedPipeEgress("md_agg_pipe", policy)
+    });
+
+// Fire them up (non-blocking; StartAsync returns when cancelled)
+    _ = egress.StartAsync(source, cts.Token);
+
+// You can still also print locally for debugging
+    await foreach (var ev in source.WithCancellation(cts.Token))
+    {
+        if (ev is AggNbbo nbbo)
+            Console.WriteLine($"NBBO {nbbo.CanonicalSymbol} {nbbo.BestBidPx:F2}@{nbbo.BestAskPx:F2}");
+    }
+}
