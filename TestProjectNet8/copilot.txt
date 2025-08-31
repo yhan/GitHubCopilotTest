@@ -1,9 +1,10 @@
 
-
+Moi:   
+--
 Je lui demande pourquoi tu construit un unsorted map et tu trie à chaque snapshot.
 
-Il me répond:
-
+Copilot:
+--
 Because ConcurrentDictionary (and plain Dictionary) do not preserve ordering, you must sort when producing a snapshot if you want results ordered by price. The static Aggregate sorts its local map, so a separate live aggregator also needs to sort its storage when creating a snapshot.
 If you want to avoid sorting at snapshot you can keep the data in a sorted structure and protect it with a lock. This trades off some write concurrency for ordered reads without an extra sort pass.
 Brief explanation of the change:
@@ -27,7 +28,8 @@ at read, why do you iterate concurrent map and create a new list? Bad performanc
 More seriously, your feeder update never clear feeder obsolete data.
 
 
-Il me répond:
+Copilot: 
+--
 
 Fixed issues: refactored FeedMany vs Feed, avoid copying on every read by maintaining a cached snapshot, and support per-venue snapshots so obsolete data is removed when a venue replaces its feed.
 Brief explanation:
@@ -36,7 +38,8 @@ Writes take a write lock and update a single cached IReadOnlyList<FeedItem> snap
 Small incremental changes are supported via FeedDelta.
 ClearVenue and ClearAll are provided. Dispose implemented.
 
-Moi:
+Anayse de son code:
+--
 et là ca part en cacahuète:
 
 il regarde le new feeds, il remove l'ancient cumulé de qty si le price du new feed se retrouve dans l'ancien feed.
@@ -48,4 +51,24 @@ il regarde le new feeds, il remove l'ancient cumulé de qty si le price du new fe
 4: il continue à construite une nouvelle liste à chaque snapshot.
 
 il pense aussi qu'une taille peut etre négative.
+
+Moi:
+--
+please understand this: feed at network reception is already a snapshot, each time you build new snapshot, you should trash completely old snaphost.
+perf issue, you do too many collection iteration when you build snapshot
+
+
+
+Copilot:
+--
+
+Updated TestProjectNet8/AggregatedFeeder.cs: incoming venue feeds are treated as full snapshots and the old cached snapshot is replaced incrementally.
+ The code computes the set of changed prices and updates _aggregate and the cached snapshot using binary search to avoid iterating the whole collection on every update.
+
+
+Probleme:
+il finit jamais son code à premier reflexion.  
+je lui dit plusieurs fois de finir son code, il me réponds toujours "done" mais il finit jamais son code.
+
+c'est pas un binary search qui va résoudre le probleme fonctionnel ...
 
