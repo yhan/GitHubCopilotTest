@@ -10,9 +10,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GitHubCopilot.AggregatedFee
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyDotNetPythonInterop", "MyDotNetPythonInterop\MyDotNetPythonInterop.csproj", "{B8CEBA02-2CF3-42C7-A652-1C1B3C23409D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.AggregatedFeeder", "ChatGPT.AggregatedFeeder\ChatGPT.AggregatedFeeder.csproj", "{C356D001-E5D7-4216-985A-B0F17E922494}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ChatGPT", "ChatGPT", "{D216DA17-F4B9-40D4-AAB6-6D5EE2E2C9BB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.L2Aggregator", "ChatGPT.L2Aggregator\ChatGPT.L2Aggregator.csproj", "{DA4B1668-69E7-472E-869D-B6F4409E747B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.AggregatedFeeder", "ChatGPT.v5\ChatGPT.AggregatedFeeder\ChatGPT.AggregatedFeeder.csproj", "{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.L2Aggregator", "ChatGPT.v5\ChatGPT.L2Aggregator\ChatGPT.L2Aggregator.csproj", "{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -40,13 +42,17 @@ Global
 		{B8CEBA02-2CF3-42C7-A652-1C1B3C23409D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B8CEBA02-2CF3-42C7-A652-1C1B3C23409D}.Debug|Any CPU.ActiveCfg = Debug|x64
 		{B8CEBA02-2CF3-42C7-A652-1C1B3C23409D}.Debug|Any CPU.Build.0 = Debug|x64
-		{C356D001-E5D7-4216-985A-B0F17E922494}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C356D001-E5D7-4216-985A-B0F17E922494}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C356D001-E5D7-4216-985A-B0F17E922494}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C356D001-E5D7-4216-985A-B0F17E922494}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5DBB7D6C-35C4-49FE-8FB8-F8440C0975EF} = {D216DA17-F4B9-40D4-AAB6-6D5EE2E2C9BB}
+		{18A4D0F8-5FC4-48B3-A02E-ACA443BB322E} = {D216DA17-F4B9-40D4-AAB6-6D5EE2E2C9BB}
 	EndGlobalSection
 EndGlobal

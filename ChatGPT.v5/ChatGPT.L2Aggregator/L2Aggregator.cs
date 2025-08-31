@@ -56,9 +56,9 @@ public sealed class L2Aggregator : IAsyncDisposable
 
     private async Task StartAsync(IEnumerable<string> symbols, CancellationToken ct)
     {
-        var hub = Channel.CreateUnbounded<MdEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        Channel<MdEvent> hub = Channel.CreateUnbounded<MdEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
-        foreach (var feed in _feeds)
+        foreach (IMarketDataFeed feed in _feeds)
         {
             _ = Task.Run(async () =>
             {
