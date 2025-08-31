@@ -1,0 +1,27 @@
+
+Moi:
+--
+each venue provides multi level feeed
+you need to aggregate them 
+the final aggregated feed should aggregate the feeds in a manner that for the same price, the size of different venues should be summed up
+
+
+ 
+ChatGPT said:
+Thought for 14s
+
+Got it — we’ll switch to multi-level (L2) aggregation where sizes at the same price across venues are summed, per side, and we’ll publish a consolidated depth (top-N). Below is a compact but production-style .NET 8 implementation you can run as-is.
+
+It includes:
+
+pluggable IMarketDataFeed emitting book deltas (price-level upserts)
+
+per-venue order book state (bid/ask maps)
+
+staleness filtering per venue
+
+aggregation by price across venues (sizes summed)
+
+stable top-N per side with change detection + min emit interval (conflation)
+
+a small simulator for two venues

@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyDotNetPythonInterop", "My
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.AggregatedFeeder", "ChatGPT.AggregatedFeeder\ChatGPT.AggregatedFeeder.csproj", "{C356D001-E5D7-4216-985A-B0F17E922494}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.L2Aggregator", "ChatGPT.L2Aggregator\ChatGPT.L2Aggregator.csproj", "{DA4B1668-69E7-472E-869D-B6F4409E747B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{C356D001-E5D7-4216-985A-B0F17E922494}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C356D001-E5D7-4216-985A-B0F17E922494}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C356D001-E5D7-4216-985A-B0F17E922494}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA4B1668-69E7-472E-869D-B6F4409E747B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
