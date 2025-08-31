@@ -1,0 +1,12 @@
+fonctionnelle
+
+il a compris que le feed size@price peut disaparaitre. il pense le update mark size=0 signifiant que le price level a disapraru.
+je lui ai dit le feed est une capture from scratch, pas un delta. Il a proposé de rajouter 'replacebid/ask' dans BookDelta.
+
+Il connait NBBO tout seul.
+
+Gestion de temps:
+dans la version L1 NBBO aggregatedFeeder, il verifie le refreshness du feed, si le feed reçu est plus ancien que le dernier best, il l'ignore. Tres bien !
+dans la version L2, il a oublié de faire ce check
+
+pour l'éligibilité de venue participation, il pense que si "ça fait trop longtemps que le venue n'a pas été updaté", il ne doit pas participer à l'agrégation.

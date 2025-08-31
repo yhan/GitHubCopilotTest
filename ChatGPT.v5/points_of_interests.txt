@@ -1,0 +1,143 @@
+# Feed price level staleness vs venue staleness
+
+i noticed this
+ var activeVenueBooks = sym.VenueBooks.Values.Where(v => (now - v.Bids.LastSeen) <= _venueStaleAfter || (now - v.Asks.LastSeen) <= _venueStaleAfter).ToArray();
+ 
+ a real world, it can happen that venue is not updated for a while, just because the participant has not sent market slice to that venue. in contrarily, a NBBO price level stales is not normal you consider should not involve that venue?
+ 
+ ChatGPT v5:
+ 
+ Great catch — you’re right to question that venue-wide “quiet ? stale ? exclude” check.
+ In real markets, silence ? staleness: if no orders change on a venue, its last published levels remain valid until explicitly changed (cancel/execute/replace), or the venue/session state says otherwise. Aging out a quiet venue will understate size and can distort NBBO.
+ 
+ What to do instead (policy)
+ 
+ Think in eligibility, not wall-clock freshness:
+ 
+ Include a venue if and only if:
+ 
+ You are connected to that venue’s feed, and
+ 
+ You are sequence-synchronized (no gap); and
+ 
+ The instrument’s trading status is eligible (TRADING/CONTINUOUS; exclude AUCTION/HALT/CLOSE unless you explicitly want them).
+ 
+ Exclude a venue (temporarily) only when:
+ 
+ Transport disconnected or heartbeat timeout (no guarantee of continuity).
+ 
+ Sequence gap detected (missed messages); mark “out-of-sync” until a snapshot is applied and sequences resume.
+ 
+ Venue reset/clear for the instrument (explicit book reset).
+ 
+ Session/state makes the book ineligible (e.g., HALT, CLOSED), per your rules.
+ 
+ Do not time-age per-price levels by default. Only remove levels on explicit delete/replace messages, or when the venue becomes ineligible (then its whole book is excluded).
+ 
+ Optional: If you have feeds that mandate a TTL (some retail APIs do), make that an instrument/venue-specific override, not a global timer.
+ 
+ Minimal code change (replace “quiet timeout” with eligibility)
+ 
+ Add per-venue sync/connection/state, and use that instead of LastSeen timers.
+ 
+ New state
+ enum TradingStatus { Unknown, Trading, Halted, Auction, Closed }
+ 
+ sealed class VenueSideBook
+ {
+     public readonly Dictionary<decimal, decimal> Levels = new();
+     // remove LastSeen — we won’t age by time
+ }
+ 
+ sealed class VenueBook
+ {
+     public readonly VenueSideBook Bids = new();
+     public readonly VenueSideBook Asks = new();
+ 
+     public bool Connected;          // transport up
+     public bool InSync;             // no seq gap
+     public TradingStatus Status;    // instrument state
+     public long LastSeq;            // last processed seq (if available)
+     public DateTimeOffset LastSnapshotAt; // for ops/metrics
+ }
+ 
+ 
+ Your adapters should set:
+ 
+ Connected = true/false on connect/disconnect.
+ 
+ InSync = false on gap; set InSync = true after you apply a fresh snapshot and resume.
+ 
+ Status from venue instrument state messages (or default Trading if not provided).
+ 
+ Eligibility helper
+ static bool VenueEligible(VenueBook v) =>
+     v.Connected && v.InSync && (v.Status == TradingStatus.Trading);
+ 
+ Replace the “active venue” selection
+ // OLD (time-based):
+ // var activeVenueBooks = sym.VenueBooks.Values.Where(v =>
+ //     (now - v.Bids.LastSeen) <= _venueStaleAfter ||
+ //     (now - v.Asks.LastSeen) <= _venueStaleAfter).ToArray();
+ 
+ // NEW (state-based):
+ var activeVenueBooks = sym.VenueBooks.Values.Where(VenueEligible).ToArray();
+ if (activeVenueBooks.Length == 0) return;
+ 
+ Handling deletes / snapshots
+ 
+ You already upsert/delete per level:
+ 
+ if (u.Size <= 0) sideBook.Levels.Remove(u.Price);
+ else             sideBook.Levels[u.Price] = u.Size;
+ 
+ 
+ Add side replace when a full snapshot arrives:
+ 
+ // Extend BookDelta to carry replace flags
+ public sealed record BookDelta(..., bool ReplaceBids=false, bool ReplaceAsks=false, long? Seq=null, TradingStatus? Status=null);
+ 
+ // In OnDelta:
+ if (d.Status is { } st) vbook.Status = st;
+ if (d.Seq is long seq)
+ {
+     if (seq != vbook.LastSeq + 1 && vbook.LastSeq != 0) vbook.InSync = false; // gap
+     vbook.LastSeq = seq;
+ }
+ if (d.ReplaceBids) vbook.Bids.Levels.Clear();
+ if (d.ReplaceAsks) vbook.Asks.Levels.Clear();
+ 
+ // After you apply a fresh snapshot (adapter side), set:
+ vbook.InSync = true;
+ vbook.LastSnapshotAt = DateTimeOffset.UtcNow;
+ 
+ When to exclude a venue
+ 
+ Disconnect: Connected=false ? excluded immediately.
+ 
+ Gap: InSync=false ? excluded until snapshot.
+ 
+ State: Status != Trading ? excluded (or apply your policy).
+ 
+ Optional: instrument-specific TTLs (only if required)
+ 
+ Some feeds do specify “quote valid for N ms”. If you must support this, add:
+ 
+ TimeSpan? _perLevelTtl = null; // default null = no TTL
+ 
+ // When building sums:
+ bool LevelFresh(DateTimeOffset lastUpdate) =>
+     _perLevelTtl is null || (DateTimeOffset.UtcNow - lastUpdate) <= _perLevelTtl;
+ 
+ 
+ …and track LastUpdate per price level. Keep it off unless required.
+ 
+ Why this is safer
+ 
+ Correctness: You don’t drop valid resting liquidity just because nothing changed.
+ 
+ Determinism: Inclusion is tied to feed correctness (connection + sequence + state), not arbitrary timers.
+ 
+ Latency: NBBO/Depth reacts instantly to explicit deletes/replaces; quiet venues keep contributing size at their last valid prices.
+ 
+ If you want, I can push a full patch of the sample to use Connected/InSync/Status end-to-end (including a simulator that triggers a sequence gap and shows the venue dropping out until a snapshot restores it).

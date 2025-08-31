@@ -108,7 +108,8 @@ public sealed class L2Aggregator : IAsyncDisposable
         foreach (var u in d.Updates)
         {
             var sideBook = u.Side == Side.Bid ? vbook.Bids : vbook.Asks;
-            sideBook.LastSeen = d.ReceiveTime;
+            if (d.ReceiveTime > sideBook.LastSeen) // Only update if newer
+                sideBook.LastSeen = d.ReceiveTime;
 
             if (u.Size <= 0)
             {

@@ -1,0 +1,205 @@
+https://chatgpt.com/c/68a58c6d-cc6c-8320-b551-3d7f6f1bbff8
+
+
+Here’s a punch-list of high-impact optimizations for the L2 aggregator, ordered by ROI. I’ll keep it concrete and .NET-8 friendly.
+
+1) Data model / math
+
+Use integer prices & sizes
+Replace decimal with fixed-point ints:
+
+// price in ticks (int), size in shares (int)
+readonly struct PxSz { public int Px; public int Sz; }
+// map: priceTick -> sizeSum
+Dictionary<int,int> bids, asks;
+
+
+decimal is slow and alloc-heavy; int64/32 fixed-point removes FP cost and hash entropy.
+
+Avoid DateTimeOffset in hot path
+Use long ts = Stopwatch.GetTimestamp() or TimeProvider.System.GetTimestamp() and convert rarely.
+
+2) Avoid full recompute per delta
+
+Right now you rebuild bidSums/askSums by iterating all venues on each delta (O(V·L) every time). Switch to incremental aggregation:
+
+Keep per-symbol aggregate maps (aggBids, aggAsks) and a per-venue map (venueBids, venueAsks).
+
+When a venue delta arrives, for each (side, price):
+
+// previous size of this venue at this price
+var old = venueBids.TryGetValue(px, out var o) ? o : 0;
+var diff = newSz - old;
+if (diff != 0) {
+    aggBids[px] = (aggBids.TryGetValue(px, out var s) ? s : 0) + diff;
+    if (aggBids[px] <= 0) aggBids.Remove(px);
+    if (newSz <= 0) venueBids.Remove(px);
+    else venueBids[px] = newSz;
+    // mark px “dirty” for top-N maintenance
+}
+
+
+This makes per-update cost O(changed levels), not O(all levels across venues).
+
+3) Top-N maintenance without sorting everything
+
+You currently OrderBy and take N ? O(L log L). Use one of:
+
+Two binary heaps (max-heap for bids, min-heap for asks) plus a hash of current heap entries. On a dirty price, update heap key or lazy-delete. This keeps O(log N) per changed level with N small (e.g., 5–20).
+
+For very small N, insertion sort on a tiny fixed buffer is fastest:
+
+Span<PxSz> top = stackalloc PxSz[Depth]; int count = 0;
+// for each dirty price, find/insert in O(N) into the tiny sorted span
+
+
+If you prefer maps, SortedDictionary<int,int> is OK but alloc-y; use it only as a fallback index and still avoid full enumerations.
+
+4) Allocation & GC pressure
+
+Stop using records for hot events. Use readonly struct for AggLevel/deltas; avoid auto-generated with/value semantics.
+
+No LINQ in hot loops. Replace .Where/.OrderBy/.Select with manual loops.
+
+Reuse buffers
+
+Use ArrayPool<PxSz>.Shared for top-N temporary buffers and per-batch delta arrays.
+
+Reuse List<LevelUpdate> in the adapters (object pool).
+
+Bounded channels
+Use a bounded output channel with DropOldest + conflation to cap memory if a consumer stalls.
+
+5) Concurrency & contention
+
+Shard by symbol
+Hash symbols into K shards (K?#CPU). Each shard is a single-threaded actor with plain Dictionary<,> (no ConcurrentDictionary). Route deltas by symbol hash to the shard’s Channel.
+
+Removes global locks.
+
+Allows parallel aggregation across symbols.
+
+Separate ingest vs aggregate
+Feeds push into a per-shard channel. Each shard thread applies deltas and emits. Keep egress on separate threads.
+
+Avoid cross-thread timestamps
+Cache UtcNow/timebase per shard (e.g., update once every 1–2 ms) if you must time-gate.
+
+6) Snapshot / gap handling
+
+Implement replace-side flags (ReplaceBids/ReplaceAsks) so “snapshot” becomes:
+
+For each price in venueSide, subtract from aggSide, then clear.
+
+Apply snapshot levels, adding to aggSide.
+This is O(levels touched) and avoids “rebuild everything”.
+
+7) Emission policy
+
+Delta output instead of full snapshots each tick. Compute a small struct diff:
+
+readonly struct BookDiff { public Side Side; public int Px; public int DeltaSz; }
+
+
+Send diffs to egress; periodic full snapshot (e.g., 200 ms) for sanity.
+
+Smarter conflation
+Emit immediately if best level changed; otherwise conflate lower levels to at most X Hz.
+
+8) Serialization / egress
+
+Source-generated System.Text.Json for structs to remove reflection cost.
+
+Zero-copy: write to pooled IBufferWriter<byte>; reuse buffers.
+
+For local clients, prefer UDS/Named Pipes with framed binary messages (varint PX, SZ).
+
+9) JIT / runtime knobs
+
+Enable PGO and Tiered PGO (default .NET 8), mark critical methods with:
+
+[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+
+
+Publish ReadyToRun with -p:PublishReadyToRun=true and crossgen2 PGO if deploying many instances.
+
+Consider NativeAOT for the egress microservice if startup/footprint matters.
+
+10) Micro-optimizations that add up
+
+Stable comparers: custom IEqualityComparer<int> isn’t needed, but avoid StringComparer where not required (use symbol IDs).
+
+Avoid repeated TryGetValue: use CollectionsMarshal.GetValueRefOrAddDefault to get ref-access to dictionary values without double lookups:
+
+ref var sumRef = ref CollectionsMarshal.GetValueRefOrAddDefault(aggBids, px, out bool existed);
+sumRef = existed ? sumRef + diff : diff;
+if (sumRef <= 0) aggBids.Remove(px);
+
+
+Cache tick size per symbol; avoid division in hot code (multiply by inverse).
+
+11) Observability (for perf tuning)
+
+Per-shard counters: processed deltas, changed prices, emitted messages, heap usage.
+
+Latency histograms (ingest?aggregate, aggregate?egress).
+
+“Dirty price” queue depth to spot hotspot symbols.
+
+Quick example: incremental + tiny-N maintenance (bids)
+// Per symbol state
+Dictionary<int,int> aggBids = new();                  // priceTick -> sum
+Dictionary<Venue, Dictionary<int,int>> venueBids = new();
+Span<PxSz> topBids = stackalloc PxSz[Depth];
+int topCount = 0;
+
+void ApplyBidUpdate(Venue v, int px, int newSz)
+{
+    var vb = venueBids.GetOrAdd(v, static _ => new Dictionary<int,int>());
+    vb.TryGetValue(px, out var old);
+    if (old == newSz) return;
+
+    var diff = newSz - old;
+    // Update venue
+    if (newSz == 0) vb.Remove(px); else vb[px] = newSz;
+
+    // Update aggregate
+    var existed = aggBids.TryGetValue(px, out var sum);
+    sum += diff;
+    if (sum <= 0) aggBids.Remove(px);
+    else aggBids[px] = sum;
+
+    // Mark px dirty in top-N (simple linear maintenance for tiny N)
+    UpdateTopN(topBids, ref topCount, Depth, px, sum);
+}
+
+static void UpdateTopN(Span<PxSz> top, ref int count, int depth, int px, int sum)
+{
+    // remove if sum<=0
+    if (sum <= 0)
+    {
+        for (int i=0;i<count;i++) if (top[i].Px==px) { top.Slice(i+1, count-i-1).CopyTo(top[i..]); count--; }
+        return;
+    }
+    // try replace existing
+    for (int i=0;i<count;i++)
+    {
+        if (top[i].Px==px) { top[i] = new PxSz{Px=px, Sz=sum}; BubbleUp(top, i); return; }
+    }
+    // insert
+    if (count < depth) { top[count++] = new PxSz{Px=px, Sz=sum}; BubbleUp(top, count-1); }
+    else if (px > top[count-1].Px) { top[count-1] = new PxSz{Px=px, Sz=sum}; BubbleUp(top, count-1); }
+
+    static void BubbleUp(Span<PxSz> a, int i)
+    {
+        // bids: sort descending by price
+        for (; i>0 && a[i].Px > a[i-1].Px; i--) (a[i-1], a[i]) = (a[i], a[i-1]);
+    }
+}
+
+
+This keeps updates O(1..N) with no allocations, no LINQ, and scales linearly with “#levels changed”, which is what you want for busy symbols.
+
+If you tell me your target depth (e.g., top-10) and expected update rate (e.g., 200k deltas/s for 2k symbols), I can tailor the shard count, buffer sizes, and an end-to-end benchmark harness (BenchmarkDotNet) to verify throughput and GC behavior.
+
+You said:

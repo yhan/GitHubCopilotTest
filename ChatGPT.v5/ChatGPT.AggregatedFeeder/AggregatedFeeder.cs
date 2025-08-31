@@ -49,7 +49,7 @@ public sealed class AggregatedFeeder : IAsyncDisposable
 
     private async Task StartAsync(IEnumerable<string> symbols, CancellationToken ct)
     {
-        var hub = Channel.CreateUnbounded<MdEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        Channel<MdEvent> hub = Channel.CreateUnbounded<MdEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
         // Fan-in from all feeds
         foreach (var feed in _feeds)
