@@ -24,4 +24,79 @@ aggregation by price across venues (sizes summed)
 
 stable top-N per side with change detection + min emit interval (conflation)
 
-a small simulator for two venues
+a small simulator for two venues.
+
+
+Moi:
+--
+
+in a venue, say for price 42.56 has disappeared how did you detect this, and when you aggregate, you remove this price level ?
+
+
+ChatGPT:
+--
+Thought for 17s
+
+Short answer: we only “know” a price level disappeared if the venue tells us so (explicit delete/zero-size) or if we receive a replace/snapshot that implies deletion. Then the per-venue level is removed immediately, and on the next aggregation pass that price won’t be present in the cross-venue sums—so it disappears from the consolidated book too.
+
+Here’s how it works in the code I gave you:
+
+1) Detection (per-venue book)
+
+Each venue adapter emits BookDelta with LevelUpdate entries.
+
+A level is considered deleted when the adapter sends Size == 0 for that (Side, Price).
+In OnDelta:
+
+if (u.Size <= 0) sideBook.Levels.Remove(u.Price);
+else             sideBook.Levels[u.Price] = u.Size; // upsert
+
+
+If your venue sends periodic full side snapshots (very common), treat them as replace for that side: clear then re-apply. A tiny extension:
+
+public sealed record BookDelta(..., bool ReplaceBids=false, bool ReplaceAsks=false);
+
+if (d.ReplaceBids) vbook.Bids.Levels.Clear();
+if (d.ReplaceAsks) vbook.Asks.Levels.Clear();
+// then apply the u.Size upserts/deletes as usual
+
+
+This ensures any price not present in the snapshot is deleted even without an explicit zero-size.
+
+If a venue goes stale (no messages for _venueStaleAfter), we don’t mutate its book, but we exclude that venue from aggregation until it speaks again. So all of its prices, including 42.56, vanish from the aggregated book while stale.
+
+2) Removal in the aggregated book
+
+After per-venue updates, we rebuild cross-venue maps by summing sizes per exact price only from active (non-stale) venues:
+
+foreach (var vb in activeVenueBooks)
+{
+    foreach (var (px, sz) in vb.Bids.Levels) if (sz > 0) bidSums[px] = bidSums.GetValueOrDefault(px) + sz;
+    foreach (var (px, sz) in vb.Asks.Levels) if (sz > 0) askSums[px] = askSums.GetValueOrDefault(px) + sz;
+}
+
+
+If 42.56 was removed on one venue but still exists on others, the aggregated size at 42.56 becomes the sum of the remaining venues.
+
+If 42.56 is gone on all active venues, it simply won’t appear in bidSums/askSums, so it drops out of the top-N output.
+
+3) When does the drop become visible?
+
+We emit when either:
+
+the top-N levels actually changed (price/size difference), or
+
+_minEmitInterval elapsed (conflation “heartbeat”).
+
+So the disappearance of 42.56 is published immediately if it affects top-N, otherwise within the next conflation tick.
+
+4) Practical adapter notes (so deletes are reliable)
+
+Normalize to canonical ticks before emitting (avoid “42.5599999 vs 42.56” ghosts).
+
+Preserve sequence numbers and handle gaps: on gap, request/replay a snapshot and use ReplaceBids/ReplaceAsks to resync.
+
+Some feeds use explicit actions (NEW/CHANGE/DELETE); map DELETE ? Size=0.
+Some use “book refresh” messages; map them to Replace* = true.
+
+If you’d like, I can drop a ReplaceBids/ReplaceAsks version of the aggregator with a small venue simulator that alternates snapshots and deltas so you can see levels appear/disappear cleanly.

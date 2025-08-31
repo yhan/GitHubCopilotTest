@@ -61,7 +61,7 @@ public sealed class RandomBookFeed : IMarketDataFeed
                 await Task.Delay(_latency + TimeSpan.FromMilliseconds(_rng.Next(0, 8)), ct);
 
                 var now = DateTimeOffset.UtcNow;
-                yield return new BookDelta(sym, _venueSymbol[sym], _venue, now, DateTimeOffset.UtcNow, updates);
+                yield return new BookDelta(sym, _venueSymbol[sym], _venue, now, DateTimeOffset.UtcNow, updates, true, true);
             }
         }
     }

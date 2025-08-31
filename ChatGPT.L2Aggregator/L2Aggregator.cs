@@ -101,6 +101,9 @@ public sealed class L2Aggregator : IAsyncDisposable
         var sym = _symbols.GetOrAdd(d.CanonicalSymbol, _ => new SymbolState());
         var vbook = sym.VenueBooks.GetOrAdd(d.Venue, _ => new VenueBook());
 
+        if (d.ReplaceBids) vbook.Bids.Levels.Clear();
+        if (d.ReplaceAsks) vbook.Asks.Levels.Clear();
+
         // Apply updates into per-venue book
         foreach (var u in d.Updates)
         {
@@ -129,19 +132,14 @@ public sealed class L2Aggregator : IAsyncDisposable
         var bidSums = new Dictionary<decimal, decimal>();
         var askSums = new Dictionary<decimal, decimal>();
 
-        foreach (var vb in activeVenueBooks)
+        foreach (VenueBook vb in activeVenueBooks)
         {
-            foreach (var kv in vb.Bids.Levels)
-            {
-                // skip zero/negative (already removed)
-                if (kv.Value <= 0) continue;
-                bidSums[kv.Key] = bidSums.TryGetValue(kv.Key, out var s) ? s + kv.Value : kv.Value;
-            }
-            foreach (var kv in vb.Asks.Levels)
-            {
-                if (kv.Value <= 0) continue;
-                askSums[kv.Key] = askSums.TryGetValue(kv.Key, out var s) ? s + kv.Value : kv.Value;
-            }
+            foreach (var (px, sz) in vb.Bids.Levels)
+                if (sz > 0)
+                    bidSums[px] = bidSums.GetValueOrDefault(px) + sz;
+            foreach (var (px, sz) in vb.Asks.Levels)
+                if (sz > 0)
+                    askSums[px] = askSums.GetValueOrDefault(px) + sz;
         }
 
         if (bidSums.Count == 0 && askSums.Count == 0) return;

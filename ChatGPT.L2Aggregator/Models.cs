@@ -19,7 +19,9 @@ public sealed record BookDelta(
     Venue Venue,
     DateTimeOffset EventTime,
     DateTimeOffset ReceiveTime,
-    IReadOnlyList<LevelUpdate> Updates) : MdEvent(CanonicalSymbol, VenueSymbol, Venue, EventTime, ReceiveTime);
+    IReadOnlyList<LevelUpdate> Updates,
+    bool ReplaceBids = false,
+    bool ReplaceAsks = false) : MdEvent(CanonicalSymbol, VenueSymbol, Venue, EventTime, ReceiveTime);
 
 public sealed record LevelUpdate(Side Side, decimal Price, decimal Size);
 
