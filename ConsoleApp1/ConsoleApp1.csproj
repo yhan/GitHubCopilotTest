@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <ServerGarbageCollection>true</ServerGarbageCollection>
+        <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- injects "System.GC.HeapCount": 10 into runtimeconfig.json -->
+<!--        <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="2" />-->
+        <!-- if you want to be explicit instead of using ServerGarbageCollection -->
+        <RuntimeHostConfigurationOption Include="System.GC.Server" Value="true" />
+    </ItemGroup>
+
+
+</Project>
