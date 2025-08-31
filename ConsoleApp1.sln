@@ -6,11 +6,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleFramework4.8", "Cons
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintETWWConsole", "PrintETWWConsole\PrintETWWConsole.csproj", "{BDB5C085-E15E-46D6-B7DB-7E71D1542598}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProjectNet8", "TestProjectNet8\TestProjectNet8.csproj", "{C2AC75CB-147A-449F-AF4B-EF2186464A5C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GitHubCopilot.AggregatedFeeder", "GitHubCopilot.AggregatedFeeder\GitHubCopilot.AggregatedFeeder.csproj", "{C2AC75CB-147A-449F-AF4B-EF2186464A5C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyDotNetPythonInterop", "MyDotNetPythonInterop\MyDotNetPythonInterop.csproj", "{B8CEBA02-2CF3-42C7-A652-1C1B3C23409D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MdAggregator", "MdAggregator\MdAggregator.csproj", "{C356D001-E5D7-4216-985A-B0F17E922494}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatGPT.AggregatedFeeder", "ChatGPT.AggregatedFeeder\ChatGPT.AggregatedFeeder.csproj", "{C356D001-E5D7-4216-985A-B0F17E922494}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

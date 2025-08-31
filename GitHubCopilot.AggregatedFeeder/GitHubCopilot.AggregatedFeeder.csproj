@@ -9,6 +9,7 @@
         <IsTestProject>true</IsTestProject>
         <LangVersion>preview</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>TestProjectNet8</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
