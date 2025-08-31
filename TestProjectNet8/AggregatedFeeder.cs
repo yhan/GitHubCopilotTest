@@ -1,56 +1,81 @@
-using System.Collections.Concurrent;
-
 namespace TestProjectNet8;
 
-public class AggregatedFeeder
+public class AggregatedFeeder : IDisposable
 {
-    private readonly ConcurrentDictionary<decimal, decimal> _map = new();
+    private readonly SortedDictionary<decimal, decimal> _map = new();
 
-    // Feed a single item from a network/thread-pool thread.
+    private readonly System.Threading.ReaderWriterLockSlim _lock =
+        new(System.Threading.LockRecursionPolicy.NoRecursion);
+
+    private bool _disposed;
+
     public void Feed(FeedItem? item)
     {
         if (item is null) return;
-        _map.AddOrUpdate(item.Price, item.Size, (_, existing) => existing + item.Size);
+        _lock.EnterWriteLock();
+        try
+        {
+            if (_map.ContainsKey(item.Price)) _map[item.Price] += item.Size;
+            else _map[item.Price] = item.Size;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 
-    // Feed multiple items for a venue (called by that venue's network thread).
     public void FeedMany(IEnumerable<FeedItem>? items)
     {
         if (items is null) return;
-        foreach (var item in items) Feed(item);
-    }
-
-    // Get a snapshot of aggregated feed items ordered by price.
-    public IReadOnlyList<FeedItem> Snapshot()
-    {
-        return _map
-            .OrderBy(kv => kv.Key)
-            .Select(kv => new FeedItem(kv.Key, kv.Value))
-            .ToList();
-    }
-
-    // Clear current aggregation.
-    public void Clear() => _map.Clear();
-
-    // Legacy / convenience: aggregate static collections (no threading).
-    public static IEnumerable<FeedItem> Aggregate(IEnumerable<IEnumerable<FeedItem>>? venueFeeds)
-    {
-        if (venueFeeds == null) yield break;
-
-        var map = new Dictionary<decimal, decimal>();
-
-        foreach (var feed in venueFeeds)
+        _lock.EnterWriteLock();
+        try
         {
-            if (feed == null) continue;
-            foreach (var item in feed)
+            foreach (var item in items)
             {
-                if (item == null) continue;
-                if (map.ContainsKey(item.Price)) map[item.Price] += item.Size;
-                else map[item.Price] = item.Size;
+                if (item is null) continue;
+                if (_map.ContainsKey(item.Price)) _map[item.Price] += item.Size;
+                else _map[item.Price] = item.Size;
             }
         }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
 
-        foreach (var kv in map.OrderBy(kv => kv.Key))
-            yield return new FeedItem(kv.Key, kv.Value);
+    public IReadOnlyList<FeedItem> Snapshot()
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            var list = new List<FeedItem>(_map.Count);
+            foreach (var kv in _map) list.Add(new FeedItem(kv.Key, kv.Value));
+            return list;
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
+
+    public void Clear()
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            _map.Clear();
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _lock.Dispose();
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

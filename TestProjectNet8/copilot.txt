@@ -1,0 +1,20 @@
+Because ConcurrentDictionary (and plain Dictionary) do not preserve ordering, you must sort when producing a snapshot if you want results ordered by price. The static Aggregate sorts its local map, so a separate live aggregator also needs to sort its storage when creating a snapshot.
+If you want to avoid sorting at snapshot you can keep the data in a sorted structure and protect it with a lock. This trades off some write concurrency for ordered reads without an extra sort pass.
+Brief explanation of the change:
+Replace ConcurrentDictionary with SortedDictionary<decimal, decimal> protected by ReaderWriterLockSlim.
+Batch feeds can hold the write lock for the whole batch, reducing repeated lock overhead.
+Snapshot takes a read lock and returns items already in price order (no OrderBy needed).
+
+
+Brief explanation of the change:
+Replace ConcurrentDictionary with SortedDictionary<decimal, decimal> protected by ReaderWriterLockSlim.
+Batch feeds can hold the write lock for the whole batch, reducing repeated lock overhead.
+Snapshot takes a read lock and returns items already in price order (no OrderBy needed).
+
+
+--
+FeedMany vs Feed need to refactored.
+
+at read, why do you iterate concurrent map and create a new list? Bad performance.
+
+More seriously, your feeder update never clear feeder obsolete data.
