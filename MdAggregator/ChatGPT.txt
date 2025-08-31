@@ -1,0 +1,37 @@
+Got it — you want a single “aggregated feeder” that ingests several market data feeds, normalizes them, and publishes one consolidated stream (e.g., NBBO quotes + consolidated trades). Here’s a lean but solid .NET 8 example you can run today. It shows:
+
+pluggable adapters (IMarketDataFeed)
+
+symbol normalization
+
+per-venue state with staleness handling
+
+NBBO computation (best bid = max, best ask = min) with tie-breakers
+
+optional conflation
+
+a unified async stream clients can consume
+
+You can drop real adapters (FIX/WebSocket/etc.) in later — two simulated venues are provided so it runs out of the box.
+
+
+Notes & next steps
+
+Adapters: implement IMarketDataFeed for real sources (FIX/FAST, ITCH, WebSocket APIs). Map per-venue symbols ? canonical tickers before emitting.
+
+Order book (L2): add a BookDelta type and a price-level map per venue; compute merged book via price-time priority or venue weighting.
+
+Clocking: consider PTP/NTP sync; prefer exchange?provided event timestamps; record both event and receive time (already modeled).
+
+Crossed/locked handling: above we just flag it. In production you may filter, widen, or apply a venue-priority policy.
+
+Conflation: the minNbboEmitInterval is a simple guard; add “emit on change OR every N ms” policies per downstream SLA.
+
+Health: treat missing heartbeats as stale; publish feed-status events.
+
+Distribution: expose the aggregated stream via gRPC, WebSocket, or shared memory ring buffer; the Channel<AggEvent> makes this trivial to surface.
+
+If you want this in Java (Project Loom + Flow/Reactive Streams) or with a Redis/Kafka egress, say the word and I’ll drop that version too.
+
+
+
